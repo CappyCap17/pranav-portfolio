@@ -1,0 +1,7 @@
+"""Production entry point for single-service hosting."""
+import os
+import uvicorn
+
+if __name__ == '__main__':
+    uvicorn.run('backend.app.production:app', host='0.0.0.0',
+                port=int(os.getenv('PORT', '10000')), proxy_headers=False)

@@ -1,0 +1,43 @@
+import { useMemo, useState } from 'react'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { ArrowLeft, ArrowRight, ArrowUpRight, BookOpen, Check, Code2, ExternalLink, Github, Linkedin, Mail, Search, Star } from 'lucide-react'
+import { useApi } from '../hooks/useApi'
+import { useAuth } from '../components/Auth'
+import State from '../components/State'
+import Markdown from '../components/Markdown'
+import { safeUrl } from '../services/api'
+import { site } from '../config/site'
+import type { Post, Repo } from '../types'
+export function Heading({ eyebrow, title, text }: { eyebrow: string; title: string; text: string }) { return <div className="page-heading"><span className="eyebrow">{eyebrow}</span><h1>{title}<span className="accent">.</span></h1><p>{text}</p></div> }
+const formatDate = (value: string) => new Date(value.length === 10 ? `${value}T00:00:00` : value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+export function Projects() {
+  const { data, error, reload } = useApi<{ items: Repo[]; stale: boolean }>('/projects')
+  const [search, setSearch] = useState(''), [language, setLanguage] = useState(''), [sort, setSort] = useState('updated')
+  const languages = [...new Set(data?.items.map(r => r.language).filter((v): v is string => !!v))].sort()
+  const items = useMemo(() => (data?.items || []).filter(r => `${r.name} ${r.description || ''}`.toLowerCase().includes(search.toLowerCase()) && (!language || r.language === language)).sort((a, b) => sort === 'stars' ? b.stargazers_count - a.stargazers_count : sort === 'name' ? a.name.localeCompare(b.name) : b.updated_at.localeCompare(a.updated_at)), [data, search, language, sort])
+  return <><div className="heading-row"><Heading eyebrow="THE WORKBENCH" title="Projects" text="Things I’ve built, explored, and put out into the world."/><a className="outline-link" href={site.githubUrl} target="_blank" rel="noreferrer"><Github size={16}/>View GitHub<ArrowUpRight size={15}/></a></div>
+  <div className="toolbar panel"><label className="search"><Search size={18}/><input aria-label="Search projects" placeholder="Find a project…" value={search} onChange={e => setSearch(e.target.value)}/></label><div className="filters"><select aria-label="Filter by language" value={language} onChange={e => setLanguage(e.target.value)}><option value="">All languages</option>{languages.map(l => <option key={l}>{l}</option>)}</select><select aria-label="Sort projects" value={sort} onChange={e => setSort(e.target.value)}><option value="updated">Recently updated</option><option value="stars">Most stars</option><option value="name">Name A–Z</option></select></div></div>
+  {data ? <>{data.stale && <p role="status" className="notice">GitHub is temporarily unavailable. Showing the last fetched projects.</p>}<div className="section-meta"><span>{items.length} REPOSITORIES</span><span><span className="tiny-dot"/> PUBLIC ON GITHUB</span></div><div className="project-grid">{items.map((repo, i) => <article className="project-card panel" key={repo.id}><div className="card-top"><span className="repo-icon"><Code2 size={21}/></span><span className="card-number">{String(i + 1).padStart(2, '0')}</span></div><h2><a href={safeUrl(repo.html_url)} target="_blank" rel="noreferrer">{repo.name}<ArrowUpRight size={17}/></a></h2><p className="description">{repo.description || 'An experiment from my GitHub workbench. Explore the repository for details.'}</p><div className="repo-tags"><span><span className={`language-dot ${repo.language?.toLowerCase()}`}/>{repo.language || 'Other'}</span><span><Star size={13}/>{repo.stargazers_count}</span>{repo.fork && <span>Fork</span>}</div><div className="card-footer"><span>Updated {formatDate(repo.updated_at)}</span>{safeUrl(repo.homepage) ? <a href={safeUrl(repo.homepage)} target="_blank" rel="noreferrer">Live demo <ExternalLink size={13}/></a> : <a href={safeUrl(repo.html_url)} target="_blank" rel="noreferrer" aria-label={`Open ${repo.name} on GitHub`}><Github size={16}/></a>}</div></article>)}</div>{!items.length && <div className="panel state"><h3>No projects found</h3><p>Try another search or language.</p><button onClick={() => { setSearch(''); setLanguage('') }}>Clear filters</button></div>}</> : <State error={error} retry={reload}/>}</>
+}
+export function Blog() {
+  const { data, error, reload } = useApi<Post[]>('/blog')
+  return <><Heading eyebrow="NOTES & THOUGHTS" title="The blog" text="A few things learned along the way. Written down."/>{data ? <div className="blog-list">{data.length ? data.map(post => <Link className="blog-card panel" key={post.slug} to={`/blog/${post.slug}`}><div className="blog-symbol"><BookOpen size={27}/></div><div><span className="eyebrow">{formatDate(post.date)} <span className="separator">/</span> {post.reading_time} MIN READ</span><h2>{post.title}</h2><p>{post.summary}</p><span className="read-link">Read the story <ArrowRight size={16}/></span></div></Link>) : <div className="panel state">No posts yet. Check back soon.</div>}</div> : <State error={error} retry={reload}/>}</>
+}
+export function Article() {
+  const { slug } = useParams()
+  const { data, error, reload } = useApi<Post>(`/blog/${slug}`)
+  return <><Link className="back-link" to="/blog"><ArrowLeft size={16}/>Back to blog</Link>{data ? <article className="article panel"><span className="eyebrow">{formatDate(data.date)} / {data.reading_time} MIN READ</span><h1>{data.title}</h1><Markdown body={data.body}/></article> : <State error={error} retry={reload}/>}</>
+}
+export function AboutPage() {
+  const { data, error, reload } = useApi<{ body: string }>('/about')
+  return <><Heading eyebrow="BEHIND THE CODE" title="About me" text={site.bio}/>{data ? <article className="article panel"><Markdown body={data.body}/></article> : <State error={error} retry={reload}/>}</>
+}
+export function Contact() {
+  return <><Heading eyebrow="SAY HELLO" title="Let’s connect" text="Have an idea, a question, or just want to talk about code?"/><div className="contact-intro panel"><span className="eyebrow">GOOD THINGS START WITH A CONVERSATION</span><h2>My inbox is a good place to start.</h2><p>Find me around the internet. I’m always happy to hear about interesting projects and new perspectives.</p></div><div className="contact-grid">{[{ title: 'Email Me', detail: site.email || 'Email address coming soon', href: site.email ? `mailto:${site.email}` : '', icon: Mail }, { title: 'LinkedIn', detail: site.linkedinUrl ? 'Connect professionally' : 'Profile link coming soon', href: site.linkedinUrl, icon: Linkedin }, { title: 'GitHub', detail: `@${site.githubUsername}`, href: site.githubUrl, icon: Github }].map(({ title, detail, href, icon: Icon }) => <div className="contact-card panel" key={title}><Icon size={26}/><h2>{title}</h2><p>{detail}</p>{href ? <a className="read-link" href={href} target="_blank" rel="noreferrer">{title}<ArrowUpRight size={16}/></a> : <span className="muted">Not added yet</span>}</div>)}</div></>
+}
+export function Login() {
+  const { session, error, refresh } = useAuth()
+  const [params] = useSearchParams()
+  return <><Heading eyebrow="YOUR SPACE" title="Welcome back" text="A familiar face on a personal corner of the web."/><section className="login-card panel"><span className="login-mark">py.</span><h2>{session?.user ? `Hello, ${session.user.name}` : 'Make yourself at home'}</h2><p>{session?.user ? 'You’re signed in. Take a look around.' : 'Sign in with your Google account.'}</p>{params.has('error') && <p className="notice" role="alert">{params.get('error') === 'configuration' ? 'Google login has not been configured yet.' : 'Sign-in could not be completed. Please try again.'}</p>}{error ? <State error={error} retry={() => void refresh()}/> : !session ? <p role="status">Checking your session…</p> : session.user ? <Link className="primary-button" to={session.is_admin ? '/admin' : '/projects'}><Check size={18}/>{session.is_admin ? 'Open admin' : 'Explore projects'}</Link> : session.login_enabled ? <a className="google-button" href="/api/auth/login"><span className="google-letter">G</span>Continue with Google<ArrowRight size={17}/></a> : <p className="notice">Google sign-in will be available once the site owner configures OAuth.</p>}<p className="login-note">A simple sign-in. No comments, no noise.</p></section></>
+}
+export function NotFound() { return <section className="panel state"><span className="eyebrow">404 / A SMALL DETOUR</span><h1>Nothing here, yet.</h1><p>This page may have moved or never existed.</p><Link className="primary-button" to="/projects">Back to projects<ArrowRight size={16}/></Link></section> }
